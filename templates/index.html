@@ -1,0 +1,399 @@
+<!DOCTYPE html>
+<html lang="fr">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>Téléchargeur YouTube</title>
+    <script src="https://cdn.tailwindcss.com"></script>
+    <style>
+        html { font-family: 'Inter', sans-serif; }
+        .selected-row {
+            background-color: #e0f2fe; /* blue-50 */
+            border-left: 4px solid oklch(59.1% 0.293 322.896); 
+        }
+        /* Styles pour gérer la modale */
+        .modal-active {
+            opacity: 1;
+            pointer-events: auto;
+        }
+        .modal-inactive {
+            opacity: 0;
+            pointer-events: none;
+        }
+    </style>
+</head>
+<body class="bg-gray-50 min-h-screen p-4 sm:p-8">
+
+    <div id="loading-modal-analyze" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 hidden">
+        <div class="bg-white p-6 rounded-xl shadow-2xl flex flex-col items-center max-w-sm w-full">
+            <svg class="animate-spin h-10 w-10 text-pink-600" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+            </svg>
+            <p class="mt-4 text-xl font-bold text-gray-800">Analyse de l'URL en cours...</p>
+            <p class="text-sm text-gray-500 mt-1 text-center">Récupération des formats disponibles. Veuillez patienter.</p>
+        </div>
+    </div>
+
+    <div id="progress-modal" class="fixed inset-0 bg-gray-900 bg-opacity-75 flex items-center justify-center z-50 modal-inactive transition-opacity duration-300">
+        <div class="bg-white p-8 rounded-xl shadow-2xl flex flex-col items-center max-w-md w-full">
+            
+            <div id="progress-content" class="w-full text-center">
+                <h2 class="text-3xl font-extrabold text-pink-700 mb-4" id="progress-title">Démarrage du Téléchargement...</h2>
+                <p class="text-gray-500 mb-6" id="status-message">Veuillez ne pas fermer cette fenêtre.</p>
+                
+                <svg id="progress-spinner" class="animate-spin h-12 w-12 text-pink-600 mx-auto" xmlns="http://www.w3.org/2000/svg" fill="none" viewBox="0 0 24 24">
+                    <circle class="opacity-25" cx="12" cy="12" r="10" stroke="currentColor" stroke-width="4"></circle>
+                    <path class="opacity-75" fill="currentColor" d="M4 12a8 8 0 018-8V0C5.373 0 0 5.373 0 12h4zm2 5.291A7.962 7.962 0 014 12H0c0 3.042 1.135 5.824 3 7.938l3-2.647z"></path>
+                </svg>
+
+                <div class="mt-8">
+                    <div class="w-full bg-gray-200 rounded-full h-4 dark:bg-gray-700">
+                        <div id="progress-bar" class="bg-green-600 h-4 rounded-full transition-all duration-300 ease-in-out" style="width: 0%"></div>
+                    </div>
+                    <p class="text-xl font-bold mt-3 text-green-700" id="progress-text">0.0%</p>
+                </div>
+
+                <div class="mt-6 p-4 bg-gray-50 rounded-lg text-left text-sm text-gray-700 w-full">
+                    <p><strong>Statut:</strong> <span id="current-status">En attente de démarrage...</span></p>
+                    <p><strong>Vitesse:</strong> <span id="download-speed">N/A</span></p>
+                    <p><strong>Taille Totale:</strong> <span id="total-size">N/A</span></p>
+                </div>
+                
+                <button onclick="cancelDownload()" id="cancel-button" class="mt-6 w-full px-4 py-2 bg-red-500 text-white font-semibold rounded-lg hover:bg-red-600 transition duration-150 flex items-center justify-center">
+                    <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                        <path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94l-1.72-1.72z" clip-rule="evenodd" />
+                    </svg>
+                    Annuler le Téléchargement
+                </button>
+            </div>
+            
+            <div id="finish-area" class="mt-8 hidden w-full">
+                <div id="success-message" class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg hidden text-center mb-4">
+                    <p class="font-bold text-lg flex items-center justify-center">
+                        <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M16.704 4.085a1.5 1.5 0 01.196 2.046l-8 10.5a.75.75 0 01-1.127.075l-4.5-4.5a.75.75 0 011.06-1.06l3.894 3.893 7.48-9.817a.75.75 0 01.996-.144z" clip-rule="evenodd" />
+                        </svg>
+                        Téléchargement terminé !
+                    </p>
+                    <p class="text-sm mt-1">Le fichier a été envoyé à votre navigateur. Cliquez sur Fermer pour continuer.</p>
+                </div>
+
+                <div id="status-message-box" class="px-4 py-3 rounded-lg hidden text-center mb-4">
+                    <p class="font-bold text-lg" id="final-status-title"></p>
+                    <p class="text-sm mt-2" id="final-status-text"></p>
+                </div>
+                
+                <button onclick="closeModal()" class="w-full mt-4 px-4 py-2 bg-pink-600 text-white font-semibold rounded-lg hover:bg-pink-700 transition duration-150">
+                    Fermer et recommencer
+                </button>
+            </div>
+        </div>
+    </div>
+    
+    <div class="max-w-4xl mx-auto bg-white shadow-xl rounded-xl p-6 md:p-10">
+        <header class="mb-8 border-b pb-4">
+            <h1 class="text-4xl font-extrabold text-pink-600">
+                YouTube Web Downloader
+            </h1>
+            <p class="text-slate-500 mt-2">Collez l'URL d'une vidéo ou d'une playlist YouTube pour commencer l'analyse.</p>
+        </header>
+
+        {% if error %}
+            <div class="bg-red-100 border border-red-400 text-red-700 px-4 py-3 rounded-lg mb-6" role="alert">
+                <p class="font-bold">Erreur d'Opération</p>
+                <p class="text-sm">{{ error }}</p>
+            </div>
+        {% elif success %}
+            <div class="bg-green-100 border border-green-400 text-green-700 px-4 py-3 rounded-lg mb-6" role="alert">
+                <p class="font-bold">Téléchargement Initié</p>
+                <p class="text-sm">{{ success }}</p>
+            </div>
+        {% endif %}
+        
+        <form action="{{ url_for('analyze') }}" method="POST" id="analyze-form" class="flex flex-col md:flex-row gap-4 mb-10">
+            <input type="url" name="url" placeholder="Ex: https://www.youtube.com/watch?v=..." required 
+                   class="flex-grow p-3 border border-slate-300 rounded-lg focus:outline-none focus:ring-2 focus:ring-pink-500 transition duration-150"
+                   value="{{ url_analyzed if url_analyzed else (request.form.url if request.method == 'POST' else '') }}">
+            <button type="submit" 
+                    class="p-3 bg-slate-700 text-white font-semibold rounded-lg hover:bg-pink-600 transition duration-150 shadow-md">
+                Analyser l'URL
+            </button>
+        </form>
+
+        {% if video_info or playlist %}
+            <h2 class="text-2xl font-bold text-gray-700 mb-4 border-b pb-2">Résultats de l'Analyse</h2>
+            
+            {% if playlist and playlist.is_playlist %}
+                <div class="bg-pink-50 border-l-4 border-pink-400 p-4 rounded-lg shadow-sm">
+                    <p class="font-bold text-lg text-pink-600 flex items-center">
+                        <svg class="w-5 h-5 mr-2 text-pink-600" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M4 3a2 2 0 00-2 2v10a2 2 0 002 2h12a2 2 0 002-2V5a2 2 0 00-2-2H4zm1 2h10v2H5V5zm0 4h10v6H5V9z" clip-rule="evenodd" />
+                        </svg>
+                        Playlist Détectée
+                    </p>
+                    <p class="mt-2 text-sm text-gray-700">Titre : <span class="font-semibold">{{ playlist.title }}</span></p>
+                    <p class="text-sm text-gray-700">Vidéos : <span class="font-semibold">{{ playlist.count }}</span></p>
+                    
+                    <form action="{{ url_for('start_download') }}" method="POST" id="playlist-download-form" class="mt-4">
+                        <input type="hidden" name="url" value="{{ playlist.url }}">
+                        <input type="hidden" name="is_playlist" value="True">
+                        <button type="submit" class="w-full md:w-auto px-4 py-2 bg-pink-600 text-white rounded-lg hover:bg-pink-700 transition duration-150 download-button flex items-center justify-center">
+                            <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                                <path fill-rule="evenodd" d="M10 2a.75.75 0 01.75.75v10.5a.75.75 0 01-1.5 0V2.75A.75.75 0 0110 2z" clip-rule="evenodd" />
+                                <path fill-rule="evenodd" d="M12.924 6.924a.75.75 0 011.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 111.06-1.06L10 9.44l2.924-2.516z" clip-rule="evenodd" />
+                                <path d="M4.5 16.75a.75.75 0 00.75.75h9.5a.75.75 0 00.75-.75V15h-11v1.75z" />
+                            </svg>
+                            Lancer le Téléchargement de la Playlist (ZIP)
+                        </button>
+                    </form>
+                </div>
+
+            {% elif video_info and formats %}
+                <div class="flex flex-col md:flex-row gap-6 mb-6">
+                    <div class="md:w-1/3">
+                        <img src="{{ video_info.thumbnail }}" alt="Vignette" class="rounded-lg shadow-md w-full aspect-video object-cover">
+                        <p class="mt-3 text-sm text-gray-700">Chaîne: <span class="font-semibold">{{ video_info.channel }}</span></p>
+                        <p class="text-sm text-gray-700">Durée: <span class="font-semibold">{{ video_info.duration }}</span></p>
+                        <p class="text-sm text-gray-700">Vues: <span class="font-semibold">{{ video_info.view_count }}</span></p>
+                    </div>
+                    <div class="md:w-2/3">
+                        <h3 class="text-xl font-bold text-violet-700 mb-2">{{ video_info.title }}</h3>
+                        <p class="text-gray-500 text-sm italic">{{ video_info.description }}</p>
+                    </div>
+                </div>
+
+                <form action="{{ url_for('start_download') }}" method="POST" id="video-download-form">
+                    <input type="hidden" name="url" value="{{ video_info.url }}">
+                    <input type="hidden" name="format_code" id="format_code_input" value="{{ formats[0].id }}"> 
+                    <input type="hidden" name="is_playlist" value="False">
+
+                    <h3 class="text-xl font-bold text-gray-700 mb-3 mt-8">Sélectionner le Format Vidéo (Muxé):</h3>
+                    
+                    <div class="overflow-x-auto rounded-lg shadow-lg">
+                        <table class="min-w-full divide-y divide-gray-200" id="formats-table">
+                            <thead class="bg-gray-50">
+                                <tr>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Option</th>
+                                    <th class="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase tracking-wider">Résolution / FPS</th>
+                                    </tr>
+                            </thead>
+                            <tbody class="bg-white divide-y divide-gray-200">
+                                {% for format in formats %}
+                                <tr class="format-row hover:bg-blue-50 cursor-pointer {% if loop.index == 1 %}selected-row{% endif %}" data-format-id="{{ format.id }}">
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm font-medium text-gray-900">{{ format.ext }} ({{ format.id }})</td>
+                                    <td class="px-6 py-4 whitespace-nowrap text-sm text-gray-500">{{ format.resolution }} @ {{ format.fps }}{% if format.fps != 'N/A' %}fps{% endif %}</td>
+                                    </tr>
+                                {% endfor %}
+                            </tbody>
+                        </table>
+                    </div>
+                    
+                    <button type="submit" 
+                            id="download-button"
+                            class="w-full mt-6 px-6 py-3 bg-pink-600 text-white font-bold rounded-lg hover:bg-pink-700 transition duration-150 download-button flex items-center justify-center"
+                            >
+                        <svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor">
+                            <path fill-rule="evenodd" d="M10 2a.75.75 0 01.75.75v10.5a.75.75 0 01-1.5 0V2.75A.75.75 0 0110 2z" clip-rule="evenodd" />
+                            <path fill-rule="evenodd" d="M12.924 6.924a.75.75 0 011.06 1.06l-3.5 3.5a.75.75 0 01-1.06 0l-3.5-3.5a.75.75 0 111.06-1.06L10 9.44l2.924-2.516z" clip-rule="evenodd" />
+                            <path d="M4.5 16.75a.75.75 0 00.75.75h9.5a.75.75 0 00.75-.75V15h-11v1.75z" />
+                        </svg>
+                        Télécharger le format sélectionné
+                    </button>
+                </form>
+
+            {% endif %}
+        {% endif %}
+    </div>
+
+    <script>
+        // --- Récupération des Éléments de l'interface ---
+        const analyzeForm = document.getElementById('analyze-form');
+        const loadingModalAnalyze = document.getElementById('loading-modal-analyze');
+        const progressModal = document.getElementById('progress-modal');
+        const progressContent = document.getElementById('progress-content');
+        const finishArea = document.getElementById('finish-area');
+        const successMessage = document.getElementById('success-message');
+        const statusMessageBox = document.getElementById('status-message-box');
+        const finalStatusTitle = document.getElementById('final-status-title');
+        const finalStatusText = document.getElementById('final-status-text');
+        
+        const progressBar = document.getElementById('progress-bar');
+        const progressText = document.getElementById('progress-text');
+        const progressTitle = document.getElementById('progress-title');
+        const currentStatus = document.getElementById('current-status');
+        const downloadSpeed = document.getElementById('download-speed');
+        const totalSize = document.getElementById('total-size');
+        const progressSpinner = document.getElementById('progress-spinner');
+        const cancelButton = document.getElementById('cancel-button');
+        
+        const urlParams = new URLSearchParams(window.location.search);
+        const jobId = urlParams.get('job_id');
+        let pollingInterval = null;
+
+        // --- Fonctions de la Modale ---
+        
+        function closeModal() {
+            progressModal.classList.replace('modal-active', 'modal-inactive');
+            if (window.history.replaceState) {
+                let url = new URL(window.location.href);
+                url.searchParams.delete('job_id'); 
+                window.history.replaceState({path: url.href}, '', url.href);
+            }
+            if (jobId) {
+                // Rediriger vers la page sans job_id pour "effacer" l'état de la modale tout en gardant l'analyse.
+                let url = window.location.href.split('?')[0];
+                if(urlParams.has('url_analyzed')) {
+                     url += '?url_analyzed=' + urlParams.get('url_analyzed');
+                }
+                window.location.href = url;
+            } else {
+                 window.location.reload(); 
+            }
+        }
+        window.closeModal = closeModal;
+        
+        function cancelDownload() {
+            if (!jobId || pollingInterval === null) return;
+
+            cancelButton.textContent = "Annulation en cours...";
+            cancelButton.disabled = true;
+            cancelButton.classList.replace('bg-red-500', 'bg-gray-400');
+            currentStatus.textContent = "Annulation demandée. Arrêt du processus en cours...";
+            progressSpinner.classList.replace('text-green-600', 'text-red-600');
+            progressSpinner.classList.replace('text-pink-600', 'text-red-600');
+
+            fetch(`/cancel_download/${jobId}`, { method: 'POST' })
+                .then(response => response.json())
+                .then(data => {
+                    console.log("Annulation demandée:", data);
+                })
+                .catch(error => {
+                    console.error("Erreur d'annulation:", error);
+                    alert("Erreur lors de la demande d'annulation.");
+                    // Réactiver le bouton en cas d'échec de la requête
+                    cancelButton.innerHTML = `<svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94l-1.72-1.72z" clip-rule="evenodd" /></svg>Annuler le Téléchargement`;
+                    cancelButton.disabled = false;
+                    cancelButton.classList.replace('bg-gray-400', 'bg-red-500');
+                });
+        }
+        window.cancelDownload = cancelDownload;
+
+        document.addEventListener('DOMContentLoaded', () => {
+            
+            // Gestion du Modal de Chargement pour l'Analyse
+            analyzeForm.addEventListener('submit', () => {
+                loadingModalAnalyze.classList.remove('hidden');
+            });
+            
+            // Gestion de la Sélection de Format
+            const videoDownloadForm = document.getElementById('video-download-form');
+            if (videoDownloadForm) {
+                const formatRows = document.querySelectorAll('.format-row');
+                const formatCodeInput = document.getElementById('format_code_input');
+
+                formatRows.forEach(row => {
+                    row.addEventListener('click', function() {
+                        formatRows.forEach(r => r.classList.remove('selected-row'));
+                        this.classList.add('selected-row');
+                        formatCodeInput.value = this.getAttribute('data-format-id');
+                    });
+                });
+            }
+            
+            // Initialisation et Polling si un Job est en cours
+            if (jobId) {
+                progressModal.classList.replace('modal-inactive', 'modal-active');
+                
+                progressContent.classList.remove('hidden');
+                finishArea.classList.add('hidden');
+                successMessage.classList.add('hidden');
+                statusMessageBox.classList.add('hidden');
+                cancelButton.disabled = false;
+                cancelButton.classList.replace('bg-gray-400', 'bg-red-500');
+
+                pollingInterval = setInterval(pollProgress, 1500); 
+            }
+
+            function pollProgress() {
+                fetch(`/progress/${jobId}`)
+                    .then(response => {
+                        if (response.status === 404) {
+                            throw new Error("Job de téléchargement expiré ou introuvable.");
+                        }
+                        return response.json();
+                    })
+                    .then(data => {
+                        if (data.status === 'Terminé') {
+                            clearInterval(pollingInterval);
+                            pollingInterval = null;
+                            
+                            progressContent.classList.add('hidden');
+                            finishArea.classList.remove('hidden');
+                            successMessage.classList.remove('hidden');
+
+                            // Déclencher le téléchargement client final
+                            window.location.href = data.download_url;
+                            
+                        } else if (data.status === 'Erreur' || data.status === 'Annulé') {
+                            clearInterval(pollingInterval);
+                            pollingInterval = null;
+                            
+                            progressContent.classList.add('hidden');
+                            finishArea.classList.remove('hidden');
+                            statusMessageBox.classList.remove('hidden');
+                            successMessage.classList.add('hidden');
+
+                            const isCancelled = (data.status === 'Annulé');
+                            
+                            statusMessageBox.classList.remove('bg-red-100', 'border-red-400', 'text-red-700', 'bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
+                            
+                            // Icône pour l'erreur (x-circle)
+                            const errorIcon = `<svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94l-1.72-1.72z" clip-rule="evenodd" /></svg>`;
+                            
+                            // Icône pour l'annulation (stop-circle)
+                            const cancelIcon = `<svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8 7a.75.75 0 01.75-.75h2.5a.75.75 0 01.75.75v5.5a.75.75 0 01-.75.75h-2.5a.75.75 0 01-.75-.75V7z" clip-rule="evenodd" /></svg>`;
+
+                            if (isCancelled) {
+                                finalStatusTitle.innerHTML = `<span class="flex items-center justify-center">${cancelIcon} Téléchargement Annulé</span>`;
+                                finalStatusText.textContent = data.error || "Le processus a été arrêté par l'utilisateur.";
+                                statusMessageBox.classList.add('bg-yellow-100', 'border-yellow-400', 'text-yellow-700');
+                            } else {
+                                finalStatusTitle.innerHTML = `<span class="flex items-center justify-center">${errorIcon} Erreur de Téléchargement</span>`;
+                                finalStatusText.textContent = data.error || "Une erreur inattendue s'est produite lors du téléchargement.";
+                                statusMessageBox.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+                            }
+                            
+                        } else {
+                            // Mise à jour de la progression
+                            const progress = Math.min(100, Math.max(0, data.progress)); 
+                            
+                            progressTitle.textContent = `Téléchargement en Cours: ${progress.toFixed(1)}%`;
+                            progressBar.style.width = `${progress}%`;
+                            progressText.textContent = `${progress.toFixed(1)}%`;
+                            currentStatus.textContent = data.status;
+                            downloadSpeed.textContent = data.speed;
+                            totalSize.textContent = data.total_bytes;
+
+                            if (progress > 0 && progressSpinner.classList.contains('text-pink-600')) {
+                                progressSpinner.classList.replace('text-pink-600', 'text-green-600');
+                            }
+                        }
+                    })
+                    .catch(error => {
+                        clearInterval(pollingInterval);
+                        pollingInterval = null;
+                        progressContent.classList.add('hidden');
+                        finishArea.classList.remove('hidden');
+                        statusMessageBox.classList.remove('hidden');
+                        successMessage.classList.add('hidden');
+                        statusMessageBox.classList.add('bg-red-100', 'border-red-400', 'text-red-700');
+                        finalStatusTitle.innerHTML = `<span class="flex items-center justify-center"><svg class="w-5 h-5 mr-2" xmlns="http://www.w3.org/2000/svg" viewBox="0 0 20 20" fill="currentColor"><path fill-rule="evenodd" d="M10 18a8 8 0 100-16 8 8 0 000 16zM8.28 7.22a.75.75 0 00-1.06 1.06L8.94 10l-1.72 1.72a.75.75 0 101.06 1.06L10 11.06l1.72 1.72a.75.75 0 101.06-1.06L11.06 10l1.72-1.72a.75.75 0 00-1.06-1.06L10 8.94l-1.72-1.72z" clip-rule="evenodd" /></svg> Erreur de Connexion</span>`;
+                        finalStatusText.textContent = "Erreur de connexion ou de job: " + error.message;
+                        console.error('Erreur lors du polling:', error);
+                    });
+            }
+        });
+    </script>
+</body>
+</html>
