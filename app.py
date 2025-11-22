@@ -192,6 +192,7 @@ def download_video_thread(url, format_code, is_playlist, job_id):
                 'merge_output_format': 'mp4',
                 'ignoreerrors': True, 'quiet': True,'no_warnings': True,
                 'progress_hooks': [lambda d: ydl_progress_hook(d, job_id)],
+                'age_limit': 99,
             }
         else:
             outtmpl = os.path.join(download_folder, '%(title)s.%(ext)s')
@@ -208,6 +209,7 @@ def download_video_thread(url, format_code, is_playlist, job_id):
                 'merge_output_format': 'mp4',
                 'quiet': True,'no_warnings': True,
                 'progress_hooks': [lambda d: ydl_progress_hook(d, job_id)],
+                'age_limit': 99,
             }
             
         DOWNLOAD_JOBS[job_id]['status'] = 'Démarrage du téléchargement...'
@@ -254,7 +256,7 @@ def analyze():
         return redirect(url_for('index', error="Veuillez fournir une URL valide."))
 
     try:
-        ydl_opts_info = {'quiet': True, 'simulate': True, 'playlist_items': '1:1'}
+        ydl_opts_info = {'quiet': True, 'simulate': True, 'playlist_items': '1:1', 'age_limit': 99,}
         with YoutubeDL(ydl_opts_info) as ydl:
             initial_info = ydl.extract_info(video_url, download=False)
             
@@ -275,7 +277,7 @@ def analyze():
         }
         return render_template('index.html', playlist=playlist_data, url_analyzed=video_url)
     else:
-        ydl_opts_info_full = {'quiet': True, 'simulate': True}
+        ydl_opts_info_full = {'quiet': True, 'simulate': True, 'age_limit': 99,}
         with YoutubeDL(ydl_opts_info_full) as ydl:
             full_info = ydl.extract_info(video_url, download=False)
             video_duration = full_info.get('duration')
