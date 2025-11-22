@@ -409,4 +409,4 @@ def serve_file(job_id):
 if __name__ == '__main__':
     # '0.0.0.0' dit à Flask d'écouter sur TOUTES les interfaces réseau disponibles, 
     # y compris votre adresse IP locale.
-    app.run(host='0.0.0.0', port=5000, debug=True, use_reloader=False)
+    app.run(host='0.0.0.0', port=5000, debug=False, use_reloader=False)
